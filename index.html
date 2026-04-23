@@ -1,0 +1,84 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>Pi Calculator to Disk</title>
+    <style>
+        body { font-family: sans-serif; background: #121212; color: #e0e0e0; display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100vh; margin: 0; }
+        .container { background: #1e1e1e; padding: 30px; border-radius: 15px; box-shadow: 0 10px 30px rgba(0,0,0,0.5); text-align: center; border: 1px solid #333; }
+        button { background: #007bff; color: white; border: none; padding: 12px 25px; border-radius: 5px; cursor: pointer; font-size: 16px; transition: 0.3s; }
+        button:hover { background: #0056b3; }
+        input { padding: 10px; border-radius: 5px; border: 1px solid #444; background: #2a2a2a; color: white; width: 150px; margin-bottom: 20px; }
+        #status { margin-top: 20px; font-size: 14px; color: #aaa; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h1>Вычислитель &pi; на диск</h1>
+    <p>Сколько знаков после запятой вычислить?</p>
+    <input type="number" id="digits" value="100000" step="10000">
+    <br>
+    <button id="startBtn">Выбрать файл и начать</button>
+    <div id="status">Готов к работе</div>
+</div>
+
+<script>
+    async function calculateAndSavePi(digits) {
+        const status = document.getElementById('status');
+        
+        try {
+            // Запрашиваем у пользователя, куда сохранить файл
+            const handle = await window.showSaveFilePicker({
+                suggestedName: 'pi_result.txt',
+                types: [{ description: 'Text File', accept: {'text/plain': ['.txt']} }]
+            });
+            
+            const writable = await handle.createWritable();
+            status.innerText = "Вычисляю и записываю...";
+
+            let n = Math.ceil(digits * 10 / 3);
+            let a = new Array(n).fill(2);
+            
+            // Записываем целую часть
+            await writable.write("3.");
+
+            for (let j = 0; j < digits; j++) {
+                let q = 0;
+                for (let i = n - 1; i > 0; i--) {
+                    let x = 10 * a[i] + q * i;
+                    a[i] = x % (2 * i - 1);
+                    q = Math.floor(x / (2 * i - 1));
+                }
+                
+                let digit = Math.floor((10 * a[0] + q) / 10);
+                a[0] = (10 * a[0] + q) % 10;
+
+                // Записываем каждый знак по отдельности
+                if (j > 0) {
+                    await writable.write(digit.toString());
+                }
+
+                // Обновляем статус каждые 1000 знаков, чтобы не тормозить
+                if (j % 1000 === 0) {
+                    status.innerText = `Записано: ${j} знаков...`;
+                }
+            }
+
+            await writable.close();
+            status.innerText = "Готово! Файл сохранен.";
+            alert("Число Пи успешно сохранено на диск!");
+
+        } catch (err) {
+            status.innerText = "Ошибка или отмена: " + err.message;
+        }
+    }
+
+    document.getElementById('startBtn').addEventListener('click', () => {
+        const d = parseInt(document.getElementById('digits').value);
+        calculateAndSavePi(d);
+    });
+</script>
+
+</body>
+</html>
