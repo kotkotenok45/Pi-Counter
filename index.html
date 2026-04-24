@@ -3,90 +3,88 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Pi Downloader</title>
+    <title>Turbo Pi Downloader</title>
     <style>
-        body { font-family: sans-serif; background: #1a1a1a; color: white; text-align: center; padding: 50px 20px; }
-        .card { background: #2a2a2a; padding: 30px; border-radius: 15px; max-width: 500px; margin: auto; box-shadow: 0 10px 25px rgba(0,0,0,0.5); }
-        input { width: 90%; padding: 12px; margin: 20px 0; border-radius: 8px; border: 1px solid #444; background: #333; color: white; font-size: 16px; }
-        button { background: #28a745; color: white; border: none; padding: 15px 30px; border-radius: 8px; font-weight: bold; cursor: pointer; width: 100%; font-size: 18px; }
-        button:disabled { background: #555; cursor: not-allowed; }
-        #log { margin-top: 20px; color: #aaa; font-family: monospace; font-size: 14px; }
+        body { font-family: sans-serif; background: #000; color: #fff; text-align: center; padding: 20px; }
+        .card { background: #1c1c1e; padding: 30px; border-radius: 20px; max-width: 400px; margin: auto; border: 1px solid #333; }
+        input { width: 80%; padding: 12px; margin: 20px 0; border-radius: 10px; border: none; background: #2c2c2e; color: #fff; font-size: 18px; text-align: center; }
+        button { background: #34c759; color: #fff; border: none; padding: 15px 30px; border-radius: 12px; font-weight: bold; cursor: pointer; width: 100%; }
+        #status { margin-top: 20px; color: #0a84ff; font-weight: bold; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h2>Скачать число &pi;</h2>
-    <p>Введите количество знаков:</p>
-    <input type="number" id="digits" value="100000" min="1">
-    <button id="btn">Начать расчет и скачать</button>
-    <div id="log">Ожидание...</div>
+    <h2>Turbo &pi; Calc</h2>
+    <p>Количество знаков:</p>
+    <input type="number" id="digits" value="100000">
+    <button id="btn">Рассчитать и Скачать</button>
+    <div id="status">Готов к быстрому расчету</div>
 </div>
 
 <script>
-    // Код для фонового процесса (Worker)
-    const workerBlob = new Blob([`
-        onmessage = function(e) {
-            const digits = e.data;
-            let n = Math.ceil(digits * 10 / 3);
-            let a = new Int32Array(n).fill(2); // Используем типизированный массив для скорости
-            let result = "3.";
+    const workerCode = `
+    onmessage = function(e) {
+        const digits = e.data;
+        const precision = digits + 10;
+        const BigI = BigInt;
 
-            for (let j = 0; j < digits; j++) {
-                let q = 0;
-                for (let i = n - 1; i > 0; i--) {
-                    let x = 10 * a[i] + q * i;
-                    a[i] = x % (2 * i - 1);
-                    q = (x / (2 * i - 1)) | 0;
-                }
-                let digit = ((10 * a[0] + q) / 10) | 0;
-                a[0] = (10 * a[0] + q) % 10;
-                
-                if (j > 0) result += digit;
-                
-                if (j % 5000 === 0) postMessage({type: 'progress', val: j});
+        function arctan(x, p) {
+            let x2 = x * x;
+            let target = BigI(10) ** BigI(p);
+            let sum = target / x;
+            let term = sum;
+            let n = 3;
+            while (true) {
+                term = term / x2;
+                let nextTerm = term / BigI(n);
+                if (nextTerm === 0n) break;
+                if ((n / 2) % 2 === 1) sum -= nextTerm;
+                else sum += nextTerm;
+                n += 2;
             }
-            postMessage({type: 'done', val: result});
+            return sum;
         }
-    `], { type: 'application/javascript' });
 
-    const worker = new Worker(URL.createObjectURL(workerBlob));
-    const btn = document.getElementById('btn');
-    const log = document.getElementById('log');
+        // Формула Мачина: pi = 4 * (4*atan(1/5) - atan(1/239))
+        postMessage({type: 'log', val: 'Запуск алгоритма Мачина...'});
+        let p = precision + 5;
+        let a = arctan(5n, p);
+        postMessage({type: 'log', val: 'Часть 1/2 готова...'});
+        let b = arctan(239n, p);
+        postMessage({type: 'log', val: 'Часть 2/2 готова...'});
+        
+        let pi = 4n * (4n * a - b);
+        let s = pi.toString();
+        let result = s[0] + "." + s.substring(1, digits + 1);
+        
+        postMessage({type: 'done', val: result});
+    };
+    `;
 
-    btn.onclick = () => {
-        const count = parseInt(document.getElementById('digits').value);
-        btn.disabled = true;
-        log.innerText = "Идет расчет... Страница активна.";
-        worker.postMessage(count);
+    const blob = new Blob([workerCode], {type: 'application/javascript'});
+    const worker = new Worker(URL.createObjectURL(blob));
+
+    document.getElementById('btn').onclick = function() {
+        const d = parseInt(document.getElementById('digits').value);
+        this.disabled = true;
+        document.getElementById('status').innerText = "Считаю очень быстро...";
+        worker.postMessage(d);
     };
 
-    worker.onmessage = (e) => {
-        if (e.data.type === 'progress') {
-            log.innerText = "Рассчитано: " + e.data.val + " знаков...";
+    worker.onmessage = function(e) {
+        if (e.data.type === 'log') {
+            document.getElementById('status').innerText = e.data.val;
         } else {
-            log.innerText = "Формирование файла...";
-            
-            // Самый важный кусок: Инициируем скачивание
-            const file = new Blob([e.data.val], { type: 'text/plain' });
-            const downloadUrl = URL.createObjectURL(file);
+            const file = new Blob([e.data.val], {type: 'text/plain'});
             const a = document.createElement('a');
-            
-            a.href = downloadUrl;
-            a.download = 'pi_number.txt'; // Имя файла
-            document.body.appendChild(a);
-            a.click(); // Симуляция клика
-            
-            // Уборка за собой
-            setTimeout(() => {
-                document.body.removeChild(a);
-                window.URL.revokeObjectURL(downloadUrl);
-                btn.disabled = false;
-                log.innerText = "Готово! Проверьте папку 'Загрузки'.";
-            }, 100);
+            a.href = URL.createObjectURL(file);
+            a.download = 'pi.txt';
+            a.click();
+            document.getElementById('status').innerText = "Скачивание!";
+            document.getElementById('btn').disabled = false;
         }
     };
 </script>
-
 </body>
 </html>
