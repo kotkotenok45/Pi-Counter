@@ -3,62 +3,57 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Turbo Pi Downloader</title>
+    <title>Correct Pi Calc</title>
     <style>
         body { font-family: sans-serif; background: #000; color: #fff; text-align: center; padding: 20px; }
         .card { background: #1c1c1e; padding: 30px; border-radius: 20px; max-width: 400px; margin: auto; border: 1px solid #333; }
         input { width: 80%; padding: 12px; margin: 20px 0; border-radius: 10px; border: none; background: #2c2c2e; color: #fff; font-size: 18px; text-align: center; }
         button { background: #34c759; color: #fff; border: none; padding: 15px 30px; border-radius: 12px; font-weight: bold; cursor: pointer; width: 100%; }
-        #status { margin-top: 20px; color: #0a84ff; font-weight: bold; }
+        #status { margin-top: 20px; color: #0a84ff; }
     </style>
 </head>
 <body>
 
 <div class="card">
-    <h2>Turbo &pi; Calc</h2>
-    <p>Количество знаков:</p>
+    <h2>Точное &pi; (Мачин)</h2>
     <input type="number" id="digits" value="100000">
-    <button id="btn">Рассчитать и Скачать</button>
-    <div id="status">Готов к быстрому расчету</div>
+    <button id="btn">Скачать файл</button>
+    <div id="status">Готов</div>
 </div>
 
 <script>
     const workerCode = `
     onmessage = function(e) {
-        const digits = e.data;
-        const precision = digits + 10;
-        const BigI = BigInt;
+        const digits = BigInt(e.data);
+        const base = 10n ** (digits + 10n); // Запас точности
 
-        function arctan(x, p) {
-            let x2 = x * x;
-            let target = BigI(10) ** BigI(p);
-            let sum = target / x;
+        function arctan(x, b) {
+            let xBig = BigInt(x);
+            let x2 = xBig * xBig;
+            let sum = b / xBig;
             let term = sum;
-            let n = 3;
+            let n = 3n;
             while (true) {
                 term = term / x2;
-                let nextTerm = term / BigI(n);
-                if (nextTerm === 0n) break;
-                if ((n / 2) % 2 === 1) sum -= nextTerm;
-                else sum += nextTerm;
-                n += 2;
+                let step = term / n;
+                if (step === 0n) break;
+                if ((n / 2n) % 2n === 1n) sum -= step;
+                else sum += step;
+                n += 2n;
             }
             return sum;
         }
 
-        // Формула Мачина: pi = 4 * (4*atan(1/5) - atan(1/239))
-        postMessage({type: 'log', val: 'Запуск алгоритма Мачина...'});
-        let p = precision + 5;
-        let a = arctan(5n, p);
-        postMessage({type: 'log', val: 'Часть 1/2 готова...'});
-        let b = arctan(239n, p);
-        postMessage({type: 'log', val: 'Часть 2/2 готова...'});
+        postMessage("Считаю первую часть...");
+        let a = arctan(5, base);
+        postMessage("Считаю вторую часть...");
+        let b = arctan(239, base);
         
         let pi = 4n * (4n * a - b);
         let s = pi.toString();
-        let result = s[0] + "." + s.substring(1, digits + 1);
+        let result = s[0] + "." + s.substring(1, Number(digits) + 1);
         
-        postMessage({type: 'done', val: result});
+        postMessage({done: result});
     };
     `;
 
@@ -66,23 +61,23 @@
     const worker = new Worker(URL.createObjectURL(blob));
 
     document.getElementById('btn').onclick = function() {
-        const d = parseInt(document.getElementById('digits').value);
+        const d = document.getElementById('digits').value;
         this.disabled = true;
-        document.getElementById('status').innerText = "Считаю очень быстро...";
+        document.getElementById('status').innerText = "Начинаю расчет...";
         worker.postMessage(d);
     };
 
     worker.onmessage = function(e) {
-        if (e.data.type === 'log') {
-            document.getElementById('status').innerText = e.data.val;
-        } else {
-            const file = new Blob([e.data.val], {type: 'text/plain'});
+        if (e.data.done) {
+            const file = new Blob([e.data.done], {type: 'text/plain'});
             const a = document.createElement('a');
             a.href = URL.createObjectURL(file);
-            a.download = 'pi.txt';
+            a.download = 'pi_correct.txt';
             a.click();
-            document.getElementById('status').innerText = "Скачивание!";
+            document.getElementById('status').innerText = "Готово!";
             document.getElementById('btn').disabled = false;
+        } else {
+            document.getElementById('status').innerText = e.data;
         }
     };
 </script>
